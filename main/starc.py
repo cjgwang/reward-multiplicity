@@ -1,8 +1,8 @@
 import numpy as np
 import torch
 from typing import Tuple, Callable, List
-from gridword import DeterministicGridWorld, Policy, Reward
-from train import SmallRewardNet, transition_to_vector, default_device
+from main.gridworld import DeterministicGridWorld, Policy, Reward
+from main.train import SmallRewardNet, transition_to_vector, default_device
 
 Tensor = torch.Tensor
 Array = np.ndarray

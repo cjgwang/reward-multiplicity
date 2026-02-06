@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from typing import Tuple, Callable, Optional, List
-from gridword import Transition, Reward, Trajectory
+from main.gridworld import Transition, Reward, Trajectory
 
 Vector = np.ndarray
 Output = np.ndarray

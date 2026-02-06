@@ -1,4 +1,6 @@
-import numpy as np
+import numpy as np                # keep NumPy for matplotlib compatibility / plotting
+import jax
+import jax.numpy as jnp          # use JAX for numerical work
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.colors import Normalize
@@ -20,8 +22,9 @@ def render_cartesian_gridworld(env: DeterministicGridWorld) -> None:
         ax.axvline(i, color='black', lw=1.5, zorder=2)
 
     # Place the Star and the Start at corner
-    start = env.start_coord + 0.5
-    star = env.goal_coord + 0.5
+    # ensure coords are NumPy arrays for matplotlib
+    start = np.array(env.start_coord) + 0.5
+    star = np.array(env.goal_coord) + 0.5
 
     ax.text(start[0], start[1], '⬤',
             ha='center', va='center',
@@ -52,8 +55,11 @@ def plot_quadrant_action_heatmap(preds_actions, star_coords=None, title=None,
                                  cmap='viridis', vmin=None, vmax=None,
                                  show_grid=True, cell_edge_color='k') -> None:
 
+    # Accept either jnp array or numpy array — convert to numpy for plotting
+    preds_actions = np.array(preds_actions)
+
     cols, rows, A = preds_actions.shape
-    assert A == 4, "preds_actions must be shape (4, rows, cols)"
+    assert A == 4, "preds_actions must be shape (cols, rows, 4)"
 
     if vmin is None:
         vmin = float(preds_actions.min())
@@ -122,13 +128,22 @@ def visualize_reward_quadrant(env: DeterministicGridWorld, reward: Reward, star:
     if(star is None):
         star = env.goal_coord
     cols, rows, A = env.cols, env.rows, env.num_actions
-    preds_actions = np.zeros((cols, rows, A), dtype=np.float32)
+
+    # build preds_actions using jnp for numerical ops
+    preds_actions = jnp.zeros((cols, rows, A), dtype=jnp.float32)
 
     for i in range(env.num_positions):
         for a in range(A):
-            coords = env.idx_to_coord(i)
+            coords = env.idx_to_coord(i)           # likely numpy array from env
+            # canonical state tuples as before
             s1 = (coords, star)
             s2 = env.next_state(s1, a)
-            preds_actions[coords[0], coords[1], a] = reward((s1, a, s2))
+            # reward may be a Python function returning float; ensure value is python float
+            val = float(reward((s1, a, s2)))
+            # use JAX indexed update
+            preds_actions = preds_actions.at[coords[0], coords[1], a].set(val)
 
-    plot_quadrant_action_heatmap(preds_actions, star, title, vmin=-1, vmax=1)
+    # convert to numpy for plotting
+    preds_actions_np = np.array(preds_actions)
+
+    plot_quadrant_action_heatmap(preds_actions_np, star, title, vmin=-1, vmax=1)
