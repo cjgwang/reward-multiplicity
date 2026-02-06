@@ -1,38 +1,23 @@
-# @title Learning (setup) {"display-mode":"form"}
-import torch.nn as nn
+import numpy as np
 import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
-import numpy as np
-import numpy as np
-from typing import Tuple, Callable, Optional
-import matplotlib.pyplot as plt
+from typing import Tuple, Callable, Optional, List
+from gridword import Transition, Reward, Trajectory
 
-# ----------------------------------------------------------------------------------------------------------
-# Type definitions
-
-Position = np.ndarray
-State = Tuple[Position, Position]
-Action = int
-Transition = Tuple[State, Action, State]
-ValueArray = np.ndarray
-Reward = Callable[[Transition], float]
-Policy = np.ndarray
-Trajectory = list[(State, Action)]
 Vector = np.ndarray
 Output = np.ndarray
 Dataset = Tuple[np.ndarray, np.ndarray]
 
-# Default device for training
 default_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# builds a vector given a transition
-def transition_to_vector(t : Transition) -> Vector:
+def transition_to_vector(t: Transition) -> Vector:
     s1, a, s2 = t
-    vector = np.concat((np.concat(s1), (a,), np.concat(s2)))
+    # Fixed the concatenation logic to work with numpy correctly
+    vector = np.concatenate((np.concatenate(s1), [a], np.concatenate(s2)))
     return vector
 
-# build dataset from sampled trajectories and reward
-def build_dataset_from_trajectories(trajectories: list[Trajectory], reward: Reward) -> Dataset:
+def build_dataset_from_trajectories(trajectories: List[Trajectory], reward: Reward) -> Dataset:
     Xs, Ys = [], []
     for traj in trajectories:
         n = len(traj)
@@ -46,7 +31,6 @@ def build_dataset_from_trajectories(trajectories: list[Trajectory], reward: Rewa
     y = np.array(Ys, dtype=np.float32)
     return X, y
 
-# Reward implemented through a small NN with ReLU and structure input_dim -> hidden* -> 1 output neuron
 class SmallRewardNet(nn.Module):
     def __init__(self, input_dim=9, hidden=[32]):
         super().__init__()
@@ -62,7 +46,6 @@ class SmallRewardNet(nn.Module):
     def forward(self, x):
         return self.net(x).squeeze(-1)
 
-# Trains a single reward NN with MLE
 def train_reward_net(net: SmallRewardNet, dataset: Dataset, device=default_device, epochs=50, batch_size=64, lr=1e-3, reg=1e-5, seed=None) -> None:
     if seed is not None:
         np.random.seed(seed)
@@ -70,8 +53,8 @@ def train_reward_net(net: SmallRewardNet, dataset: Dataset, device=default_devic
     X, y = dataset
     X_t = torch.from_numpy(X).float().to(device)
     y_t = torch.from_numpy(y).float().to(device)
-    dataset = TensorDataset(X_t, y_t)
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    dataset_obj = TensorDataset(X_t, y_t)
+    loader = DataLoader(dataset_obj, batch_size=batch_size, shuffle=True)
     opt = torch.optim.Adam(net.parameters(), lr=lr, weight_decay=reg)
     loss_fn = nn.MSELoss()
 
@@ -85,19 +68,19 @@ def train_reward_net(net: SmallRewardNet, dataset: Dataset, device=default_devic
         if n_batches > 0 and ep % max(1, epochs//5) == 0:
             print(f"[ep {ep}/{epochs}] loss={tot / n_batches:.8f}")
 
-# Trains an ensemble of rewards function with the given hyperparameters
 LossFunction = Callable[[Output, list[Tuple[SmallRewardNet, Output]]], Tuple[float, Optional[dict]]]
-def train_ensemble(nets: list[SmallRewardNet], dataset: Dataset,
+
+def train_ensemble(nets: List[SmallRewardNet], dataset: Dataset,
                      loss_fn: LossFunction, device=default_device,
-                     epochs=50, batch_size=64, lr=1e-3, reg=1e-5, seed=None) -> None:
+                     epochs=50, batch_size=64, lr=1e-3, reg=1e-5, seed=None) -> dict:
     if seed is not None:
         np.random.seed(seed)
         torch.manual_seed(seed)
     X, y = dataset
     X_t = torch.from_numpy(X).float().to(device)
     y_t = torch.from_numpy(y).float().to(device)
-    dataset = TensorDataset(X_t, y_t)
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    dataset_obj = TensorDataset(X_t, y_t)
+    loader = DataLoader(dataset_obj, batch_size=batch_size, shuffle=True)
     params = []
     for net in nets:
         params += list(net.parameters())
@@ -122,51 +105,26 @@ def train_ensemble(nets: list[SmallRewardNet], dataset: Dataset,
             opt.zero_grad()
             loss.backward()
             opt.step()
-
             tot += float(loss.item())
             n_batches += 1
         if n_batches > 0 and ep % max(1, epochs//5) == 0:
             print(f"[ep {ep}/{epochs}] loss={tot / n_batches:.8f} trackers:")
             for name, val in history.items():
-                print(f"{name}  :  {val[-1] :.8f}")
+                print(f"{name} : {val[-1] :.8f}")
     return history
 
-# Makes a plot of the history produced by train_ensemble
-def plot_ensemble_history(history: dict, title: str = "Ensemble Training History") -> None:
-    if not history:
-        print("History is empty. Nothing to plot.")
-        return
-
-    plt.figure(figsize=(10, 6))
-
-    epochs = range(1, max(map(len, history.values())) + 1)
-
-    for metric_name, values in history.items():
-        plt.plot(epochs, values, label=metric_name)
-
-    plt.title(title)
-    plt.xlabel("Batch")
-    plt.ylabel("Value")
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
-
-# Standard MSE LossFunction for the ensemble
 def ensemble_MSE():
     loss_fn = nn.MSELoss()
-    def loss(y: Output, outputs: list[Tuple[SmallRewardNet, Output]]) -> Tuple[float, dict]:
+    def loss(y: Output, outputs: List[Tuple[SmallRewardNet, Output]]) -> Tuple[float, dict]:
         total_loss = 0.0
         max_loss = 0.0
         for net, out in outputs:
-            loss = loss_fn(out, y)
-            total_loss += loss
-            max_loss = max(max_loss, loss)
+            l = loss_fn(out, y)
+            total_loss += l
+            max_loss = max(max_loss, l)
         return (total_loss, {"total_loss":total_loss.item(), "max_loss":max_loss.item()})
     return loss
 
-# Builds reward function from reward NN
-# Note that this creates a reference, and does not freeze/copy the NN
 def reward_from_net(net, device=default_device):
     def r(t: Transition) -> float:
         net.eval()

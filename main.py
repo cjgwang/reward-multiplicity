@@ -1,36 +1,45 @@
-rng = np.random.RandomState(234235)
-seed = lambda : (rng.randint(0, 2**32))
-torch.manual_seed(seed())
+import numpy as np
+import torch
+from gridword import DeterministicGridWorld, star_reward, uniform_policy, sample_trajectory
+from train import build_dataset_from_trajectories, SmallRewardNet, train_ensemble, ensemble_MSE
+from starc import ensemble_STARc_loss
+from render import render_cartesian_gridworld
 
-env = DeterministicGridWorld()
-reward = star_reward(env)
-policy = uniform_policy(env)
-trajectories = []
-for i in range(5):
-    env.goal_coord = np.array((i, i))
-    trajectories += [sample_trajectory(env, 1000, policy, seed=seed()) for _ in range(5)]
-dataset = build_dataset_from_trajectories(trajectories, reward)
+def main():
+    rng = np.random.RandomState(234235)
+    get_seed = lambda : (rng.randint(0, 2**32))
+    torch.manual_seed(get_seed())
 
-nets = [SmallRewardNet(hidden=[32,32,32,32]).to(default_device) for _ in range(200)]
-outs = [reward_from_net(net) for net in nets]
+    env = DeterministicGridWorld()
+    reward_fn = star_reward(env)
+    policy = uniform_policy(env)
+    
+    trajectories = []
+    for i in range(5):
+        env.goal_coord = np.array((i, i))
+        trajectories += [sample_trajectory(env, 1000, policy, seed=get_seed()) for _ in range(5)]
+    
+    dataset = build_dataset_from_trajectories(trajectories, reward_fn)
+    print(f"Dataset built with {len(dataset[0])} samples.")
 
-mse = ensemble_MSE()
-starc = ensemble_STARc_loss(env, policy)
-f = lambda x,y : x - 1e-3 * y
-loss = combine_ensemble_losses(f, mse, starc, "mse", "starc")
+    # Initialize Ensemble
+    nets = [SmallRewardNet() for _ in range(3)]
+    
+    # Combined Loss example
+    mse_l = ensemble_MSE()
+    starc_l = ensemble_STARc_loss(env, policy)
+    
+    def combined_loss(y, outputs):
+        l1, t1 = mse_l(y, outputs)
+        l2, t2 = starc_l(y, outputs)
+        # Example weight: 1.0 * MSE + 0.1 * STARc
+        return l1 + 0.1 * l2, {**t1, **t2}
 
-history = train_ensemble(nets, dataset, loss, seed=seed(),
-                            epochs=100, batch_size=2048, lr=1e-3, reg=1e-4)
-plot_ensemble_history(history)
+    print("Starting Training...")
+    history = train_ensemble(nets, dataset, combined_loss, epochs=20)
+    
+    print("Training complete. Rendering environment...")
+    render_cartesian_gridworld(env)
 
-i = 0
-for out in outs:
-    i += 1
-    print(i, starc_distance(env, policy, reward, out))
-
-print(starc_distance(env, policy, reward, outs[21]))
-
-
-for s in range(env.num_positions):
-    star = env.idx_to_coord(s)
-    visualize_reward_quadrant(env, outs[6], star)
+if __name__ == "__main__":
+    main()

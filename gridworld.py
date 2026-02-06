@@ -1,10 +1,5 @@
-# @title Gridworld Environment (setup) {"display-mode":"form"}
 import numpy as np
 from typing import Tuple, Callable
-import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon
-from matplotlib.colors import Normalize
-from matplotlib.cm import ScalarMappable
 
 # ----------------------------------------------------------------------------------------------------------
 # Type definitions
@@ -16,7 +11,7 @@ Transition = Tuple[State, Action, State]
 ValueArray = np.ndarray
 Reward = Callable[[Transition], float]
 Policy = np.ndarray
-Trajectory = list[(State, Action)]
+Trajectory = list[Tuple[State, Action]]
 
 # ----------------------------------------------------------------------------------------------------------
 # Gridworld class
@@ -75,11 +70,11 @@ class DeterministicGridWorld: #deterministic env
 # Standard policies and rewards
 
 # Uniform random policy
-def uniform_policy(env) -> Policy:
+def uniform_policy(env: DeterministicGridWorld) -> Policy:
    return np.ones((env.num_states, env.num_actions)) / env.num_actions
 
 # Random deterministic policy
-def make_random_policy(env, seed=None) -> Policy:
+def make_random_policy(env: DeterministicGridWorld, seed=None) -> Policy:
     rng = np.random.RandomState(seed)
     policy = np.zeros((env.num_states, env.num_actions))
     for state in range(env.num_states):
@@ -88,7 +83,7 @@ def make_random_policy(env, seed=None) -> Policy:
     return policy
 
 # The goal reward
-def star_reward(env) -> Reward:
+def star_reward(env: DeterministicGridWorld) -> Reward:
     def r(transition: Transition) -> float:
         _, _, s2 = transition
         pos, star = s2
@@ -96,7 +91,7 @@ def star_reward(env) -> Reward:
     return r
 
 # The corner reward
-def corner_reward(env) -> Reward:
+def corner_reward(env: DeterministicGridWorld) -> Reward:
     corner = [env.cols - 1, env.rows - 1]
     def r(transition: Transition) -> float:
         _, _, s2 = transition
@@ -113,7 +108,7 @@ def inverse_reward(reward: Reward) -> Reward:
 
 #used ot build dataset
 # Returns a trajectory of the specified length in env following policy
-def sample_trajectory(env, length: int, policy: Policy, seed=None) -> Trajectory:
+def sample_trajectory(env: DeterministicGridWorld, length: int, policy: Policy, seed=None) -> Trajectory:
     rng = np.random.RandomState(seed)
     traj = []
     state = (env.start_coord, env.goal_coord)
@@ -124,4 +119,3 @@ def sample_trajectory(env, length: int, policy: Policy, seed=None) -> Trajectory
         traj.append((state, a))
         state = env.next_state(state, a)
     return traj
-

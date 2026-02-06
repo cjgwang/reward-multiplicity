@@ -3,12 +3,10 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.colors import Normalize
 from matplotlib.cm import ScalarMappable
-
-# ----------------------------------------------------------------------------------------------------------
-# Rendering
+from gridword import DeterministicGridWorld, Reward, Position
 
 # Renders a gridworld with ★ for the star and ● for the start position
-def render_cartesian_gridworld(env) -> None:
+def render_cartesian_gridworld(env: DeterministicGridWorld) -> None:
     fig, ax = plt.subplots(figsize=(env.cols + 1, env.rows + 1))
 
     # Set the limits to match a 5x5 grid
@@ -16,14 +14,12 @@ def render_cartesian_gridworld(env) -> None:
     ax.set_ylim(0, env.rows)
 
     # Draw the grid lines
-    # We use a loop to ensure lines are at integer boundaries
     for i in range(env.rows + 1):
         ax.axhline(i, color='black', lw=1.5, zorder=2)
     for i in range(env.cols + 1):
         ax.axvline(i, color='black', lw=1.5, zorder=2)
 
     # Place the Star and the Start at corner
-    # To center them in the cell, we add 0.5 to the integer coordinates.
     start = env.start_coord + 0.5
     star = env.goal_coord + 0.5
 
@@ -37,7 +33,6 @@ def render_cartesian_gridworld(env) -> None:
             zorder=3)
 
     # Configure Number Lines (Axes)
-    # Ticks at 0.5, 1.5, 2.5, 3.5, 4.5 correspond to labels 0, 1, 2, 3, 4
     ax.set_xticks(np.arange(0.5, env.cols, 1))
     ax.set_xticklabels(np.arange(env.cols))
     ax.set_yticks(np.arange(0.5, env.rows, 1))
@@ -48,16 +43,11 @@ def render_cartesian_gridworld(env) -> None:
     ax.set_ylabel("Y coordinate", fontsize=12)
     ax.set_title("Gridworld", fontsize=14, fontweight='bold')
 
-    # Ensure the plot is square and clean
     ax.set_aspect('equal')
     plt.grid(False)
     plt.tight_layout()
     plt.show()
 
-"""
-    Draw each cell partitioned into 4 triangles (up/down/left/right) colored by preds_actions.
-    preds_actions: (cols, rows, 4)  actions order: 0=up,1=down,2=left,3=right
-"""
 def plot_quadrant_action_heatmap(preds_actions, star_coords=None, title=None,
                                  cmap='viridis', vmin=None, vmax=None,
                                  show_grid=True, cell_edge_color='k') -> None:
@@ -100,20 +90,17 @@ def plot_quadrant_action_heatmap(preds_actions, star_coords=None, title=None,
                                facecolor=color, edgecolor=cell_edge_color, linewidth=0.3)
                 ax.add_patch(poly)
 
-    # grid lines
     if show_grid:
         for x in range(cols + 1):
             ax.plot([x, x], [0, rows], color='black', linewidth=0.6, alpha=0.6)
         for y in range(rows + 1):
             ax.plot([0, cols], [y, y], color='black', linewidth=0.6, alpha=0.6)
 
-    # star markers
     if star_coords is not None:
         sc, sr = star_coords
         ax.scatter([sc + 0.5], [sr + 0.5], s=200, marker='*',
                     edgecolor='white', facecolor='yellow', linewidth=1.0, zorder=5)
 
-    # shared colorbar
     sm = ScalarMappable(norm=norm, cmap=cmap)
     sm.set_array(preds_actions)
     cbar = fig.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
@@ -131,8 +118,7 @@ def plot_quadrant_action_heatmap(preds_actions, star_coords=None, title=None,
 
     plt.show()
 
-# Visualizes the reward in env using standard settings for fixed star position
-def visualize_reward_quadrant(env, reward: Reward, star: Position = None, title: str = "Reward Map") -> None:
+def visualize_reward_quadrant(env: DeterministicGridWorld, reward: Reward, star: Position = None, title: str = "Reward Map") -> None:
     if(star is None):
         star = env.goal_coord
     cols, rows, A = env.cols, env.rows, env.num_actions
