@@ -1,0 +1,40 @@
+[project]
+name = "reward-multiplicity"
+version = "0.1.0"
+description = "MFR RIO project"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+
+authors = [
+  { name = "MFR, CW, MD, LS" }
+]
+
+dependencies = [
+  "numpy>=1.23",
+  "torch>=2.0",
+  "matplotlib>=3.7",
+]
+
+[project.optional-dependencies]
+dev = [
+  "black>=24.0",
+  "ruff>=0.1",
+  "mypy>=1.8",
+]
+
+[tool.uv]
+package = false
+
+[tool.black]
+line-length = 88
+target-version = ["py39"]
+
+[tool.ruff]
+line-length = 88
+select = ["E", "F", "I"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.9"
+ignore_missing_imports = true
