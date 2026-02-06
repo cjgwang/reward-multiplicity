@@ -10,7 +10,6 @@ Overview
 - Run independent experiments
 
 Project Structure
-.
 ├── main.py        # Running experiments
 ├── gridworld.py   # Deterministic Gridworld environment, policies, rewards, trajectories
 ├── train.py       # Dataset construction, reward networks, training loops
