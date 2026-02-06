@@ -23,6 +23,7 @@ Overview
     ├── cath/
     ├── lexi/
     └── miguel/
+```
 
 ## Environment
 DeterministicGridWorld
@@ -59,7 +60,7 @@ SmallRewardNet: a simple MLP predicting scalar rewards
 
 Trained either individually or as an ensemble
 
-Ensemble Training & STAR-c
+### Ensemble Training & STAR-c
 
 The main experiment trains an ensemble of reward networks with a combined loss:
 
@@ -79,7 +80,7 @@ This helps expose reward multiplicity while keeping behaviour consistent.
 
 Running the Code
 
-Requirements
+## Requirements
 
 Python 3.9+
 
@@ -90,25 +91,7 @@ PyTorch
 Matplotlib
 
 
-Run the main experiment
-`python main.py`
-
-
-This will:
-
-Generate trajectories for multiple goal locations
-
-Build a reward dataset
-
-Train an ensemble of reward networks
-
-Print training diagnostics
-
-Render the final Gridworld
-
-Visualisation
-
-Gridworld renderer shows:
+## Gridworld renderer shows:
 
 ⬤ agent start position
 
