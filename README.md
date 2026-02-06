@@ -8,18 +8,20 @@ Overview
 - Train an ensemble of reward networks
 - Penalise non-diversity between rewards using a canonicalised distance STARC
 - Run independent experiments
+## Project Structure
 
-Project Structure
+```text
+.
 ├── main.py        # Running experiments
 ├── gridworld.py   # Deterministic Gridworld environment, policies, rewards, trajectories
 ├── train.py       # Dataset construction, reward networks, training loops
-├── starc.py       # STARC canonicalisation and ensemble loss
+├── starc.py       # STARc canonicalisation and ensemble loss
 ├── render.py      # Gridworld and reward visualisations
 ├── README.md
 ├── LICENSE
 └── playground/    # Experiments
-    ├── cath/     
-    ├── lexi/ 
+    ├── cath/
+    ├── lexi/
     └── miguel/
 
 ## Environment
