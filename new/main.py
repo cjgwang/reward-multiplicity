@@ -20,7 +20,7 @@ def main():
     env = DeterministicGridWorld()
     reward_fn = star_reward(env)
     policy = uniform_policy(env)
-
+    print("Initialised seed. Now building trajectories.")
     trajectories = []
     for i in range(5):
         env.goal_coord = jnp.array((i, i))
