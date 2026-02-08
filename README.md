@@ -60,15 +60,15 @@ SmallRewardNet: a simple MLP predicting scalar rewards
 
 Trained either individually or as an ensemble
 
-### Ensemble Training & STAR-c
+### Ensemble Training & STARC
 
 The main experiment trains an ensemble of reward networks with a combined loss:
 
 MSE loss against the ground-truth reward
 
-STAR-c loss to encourage diversity between canonicalised rewards
+STARC loss to encourage diversity between canonicalised rewards
 
-STAR-c works by:
+STARC works by:
 
 Computing the successor representation under a policy
 
@@ -107,6 +107,6 @@ This is a research prototype, not an optimised RL implementation
 
 Policies are fixed (no planning or control learning)
 
-STAR-c assumes full knowledge of the environment dynamics
+STARC assumes full knowledge of the environment dynamics
 
 Some files currently assume small state spaces (matrix inversions)
