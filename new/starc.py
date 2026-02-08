@@ -1,8 +1,8 @@
 import jax
 import jax.numpy as jnp
-from typing import Tuple, Callable, List
-from main.gridworld import DeterministicGridWorld, Policy, Reward
-from main.train import SmallRewardNet, transition_to_vector, default_device
+from typing import Tuple, List
+from new.gridworld import DeterministicGridWorld, Policy, Reward
+from new.train import SmallRewardNet, transition_to_vector, default_device
 
 Tensor = jnp.ndarray
 Array = jnp.ndarray
@@ -61,7 +61,7 @@ def ensemble_STARc_loss(
     policy: Policy,
     gamma: float = 0.9,
     frozen=[],
-    device=default_device,   # kept for signature compatibility
+    device=default_device,  
 ):
     N, A = env.num_states, env.num_actions
     P = build_transition_matrix(env)
@@ -110,8 +110,8 @@ def ensemble_STARc_loss(
 
         avg_dist = total_dist / (n * m + n * (n - 1) / 2 + 1e-8)
         trackers = {
-            "avg_dist": float(avg_dist),
-            "max_dist": float(max_dist),
+            "avg_dist": avg_dist,
+            "max_dist": max_dist,
         }
         return avg_dist, trackers
 

@@ -1,9 +1,9 @@
 import numpy as np
 import torch
-from main.gridworld import DeterministicGridWorld, star_reward, uniform_policy, sample_trajectory
-from main.train import build_dataset_from_trajectories, SmallRewardNet, train_ensemble, ensemble_MSE
-from main.starc import ensemble_STARc_loss
-from main.render import render_cartesian_gridworld
+from gridworld import DeterministicGridWorld, star_reward, uniform_policy, sample_trajectory
+from train import build_dataset_from_trajectories, SmallRewardNet, train_ensemble, ensemble_MSE
+from starc import ensemble_STARc_loss
+from render import render_cartesian_gridworld
 
 def main():
     rng = np.random.RandomState(234235)

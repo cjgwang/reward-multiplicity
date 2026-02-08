@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.colors import Normalize
 from matplotlib.cm import ScalarMappable
-from main.gridworld import DeterministicGridWorld, Reward, Position
+from gridword import DeterministicGridWorld, Reward, Position
 
 # Renders a gridworld with ★ for the star and ● for the start position
 def render_cartesian_gridworld(env: DeterministicGridWorld) -> None:

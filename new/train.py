@@ -1,24 +1,19 @@
-# main/train.py  -- JAX / jnp / optax version
 import jax
 import jax.numpy as jnp
 import optax
 from typing import Tuple, Callable, Optional, List, Dict, Any
-from main.gridworld import Transition, Reward, Trajectory
+from new.gridworld import Transition, Reward, Trajectory
 
 Vector = jnp.ndarray
 Output = jnp.ndarray
 Dataset = Tuple[jnp.ndarray, jnp.ndarray]
 
-# default_device kept for signature compatibility (not used in JAX version)
 default_device = None
 
-# ---------------------------
-# Utilities
+# Helpers
 # ---------------------------
 def transition_to_vector(t: Transition) -> Vector:
     s1, a, s2 = t
-    # use jnp.concatenate consistently
-    # s1 and s2 may be numpy arrays from gridworld; convert to jnp
     s1_arr = jnp.asarray(s1).reshape(-1)
     s2_arr = jnp.asarray(s2).reshape(-1)
     a_arr = jnp.asarray([a])
@@ -40,8 +35,8 @@ def build_dataset_from_trajectories(trajectories: List[Trajectory], reward: Rewa
     y = jnp.array(Ys, dtype=jnp.float32)
     return X, y
 
-# ---------------------------
-# SmallRewardNet (JAX-friendly)
+
+# SmallRewardNet
 # ---------------------------
 class SmallRewardNet:
     """Small MLP implemented with pure JAX arrays (no Flax dependency).
@@ -64,7 +59,6 @@ class SmallRewardNet:
             in_dim = self.layer_sizes[i]
             out_dim = self.layer_sizes[i + 1]
             k = keys[i]
-            # Glorot uniform init
             glorot_lim = jnp.sqrt(6.0 / (in_dim + out_dim))
             W = jax.random.uniform(k, (in_dim, out_dim), minval=-glorot_lim, maxval=glorot_lim, dtype=jnp.float32)
             b = jnp.zeros((out_dim,), dtype=jnp.float32)
@@ -103,7 +97,6 @@ class SmallRewardNet:
     def set_params_pytree(self, params_pytree: List[Dict[str, jnp.ndarray]]):
         self.params = params_pytree
 
-# ---------------------------
 # Training utilities (JAX + optax)
 # ---------------------------
 LossFunction = Callable[[Output, list[Tuple[SmallRewardNet, Output]]], Tuple[jnp.ndarray, Optional[dict]]]
@@ -116,9 +109,8 @@ def train_reward_net(net: SmallRewardNet, dataset: Dataset, epochs: int = 50, ba
         seed = 0
     key = jax.random.PRNGKey(seed)
 
-    # Build params pytree for single-net optimization: represent as list with single dict
     params = net.get_params_pytree()
-    # Use optax optimizer on the pytree (list[dict] is a pytree)
+    # Use optax optimizer on the pytree
     optimizer = optax.adam(learning_rate=lr, eps=1e-8)
     opt_state = optimizer.init(params)
 
@@ -129,7 +121,6 @@ def train_reward_net(net: SmallRewardNet, dataset: Dataset, epochs: int = 50, ba
     def loss_and_grads(p, xb, yb):
         # temporarily set net params to p for forward
         def forward(p_local, xb_local):
-            # create a lightweight apply using p_local
             out = xb_local
             for i, layer in enumerate(p_local):
                 W = layer["W"]
@@ -141,7 +132,6 @@ def train_reward_net(net: SmallRewardNet, dataset: Dataset, epochs: int = 50, ba
 
         preds = forward(p, xb)
         loss = jnp.mean((preds - yb) ** 2)
-        # weight decay (L2) regularization on all params
         l2 = 0.0
         for layer in p:
             l2 = l2 + jnp.sum(layer["W"] ** 2)
@@ -187,8 +177,6 @@ def train_ensemble(nets: List[SmallRewardNet], dataset: Dataset,
 
     # Build params pytree: a list of params dicts (one per net)
     params_list = [net.get_params_pytree() for net in nets]
-    # params_list is a pytree: list of list-of-dict. For simplicity, we'll reorganize as list-of-dicts per net.
-    # But SmallRewardNet.get_params_pytree returns a list-of-dicts (layers) which is fine as a pytree element.
     optimizer = optax.adam(learning_rate=lr, eps=1e-8)
     opt_state = optimizer.init(params_list)
 
@@ -196,7 +184,6 @@ def train_ensemble(nets: List[SmallRewardNet], dataset: Dataset,
 
     # loss + grads function
     def compute_loss_and_grads(params_pytree, xb, yb):
-        # params_pytree is a list where params_pytree[i] is the params for net i (list of layer dicts)
         outputs = []
         for i, p in enumerate(params_pytree):
             # forward using p
@@ -213,10 +200,9 @@ def train_ensemble(nets: List[SmallRewardNet], dataset: Dataset,
         loss_value, trackers = loss_fn(yb, outputs)
         return loss_value, trackers
 
-    # JAX-grad wrapper: returns grads for params_pytree and also the trackers from forward pass
     def loss_for_grad(pytree, xb, yb):
         loss_val, _ = compute_loss_and_grads(pytree, xb, yb)
-        # add L2 regularization across all nets
+        # add L2 regularisation
         l2 = 0.0
         for p in pytree:
             for layer in p:
@@ -268,7 +254,6 @@ def train_ensemble(nets: List[SmallRewardNet], dataset: Dataset,
 
     return history
 
-# ---------------------------
 # Ensemble MSE loss (JAX)
 # ---------------------------
 def ensemble_MSE():
@@ -279,10 +264,9 @@ def ensemble_MSE():
             l = jnp.mean((out - y) ** 2)
             total_loss = total_loss + l
             max_loss = jnp.maximum(max_loss, l)
-        return total_loss, {"total_loss": float(total_loss), "max_loss": float(max_loss)}
+        return total_loss, {"total_loss": total_loss, "max_loss": max_loss}
     return loss
 
-# ---------------------------
 # reward_from_net for JAX nets
 # ---------------------------
 def reward_from_net(net: SmallRewardNet):
