@@ -82,13 +82,11 @@ Running the Code
 
 ## Requirements
 
-Python 3.9+
-
-NumPy
-
-PyTorch
-
-Matplotlib
+- Python 3.9+
+- NumPy
+- PyTorch
+- Matplotlib
+- Jax
 
 
 ## Gridworld renderer shows:
