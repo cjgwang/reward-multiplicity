@@ -161,9 +161,6 @@ def plot_heatmap_row(ax_row, heatmaps, star_positions, star_y, vmin, vmax,
             k = star_to_idx[star]
             ax.imshow(heatmaps[k], origin='upper', cmap=cmap, norm=norm, aspect='equal')
             ax.scatter([gx], [star_y], s=50, marker='*', c='yellow', edgecolors='white', linewidths=0.5, zorder=4)
-            if mark_corner:
-                ax.scatter([STAR_POS[0]], [STAR_POS[1]], s=30, marker='s',
-                           c='red', edgecolors='white', linewidths=0.3, zorder=3, alpha=0.7)
         ax.set_xticks([]); ax.set_yticks([])
         ax.set_title(f"★=({gx},{star_y})", fontsize=5, pad=1)
     return norm
@@ -177,7 +174,7 @@ criterion = nn.MSELoss()
 print(f"\n── Phase 1a: Pre-training M0 on CORNER data ({EPOCHS_PRE} epochs) ──")
 set_seed(0)
 X_corner, y_corner = generate_corner_dataset_aligned(
-    star_pos=STAR_POS, n_pos=N_POS, n_neg=N_NEG, H=ROWS, W=COLS)
+    star_pos=STAR_POS, n_pos=N_POS, n_neg=N_NEG, H=ROWS, W=COLS, env=env)
 n_val = int(0.1 * len(X_corner))
 corner_train = make_loader(X_corner[:-n_val], y_corner[:-n_val])
 corner_val   = make_loader(X_corner[-n_val:], y_corner[-n_val:], shuffle=False)
@@ -191,29 +188,20 @@ for ep in range(1, EPOCHS_PRE + 1):
         dc, ds = starc_dist_to_true(m0)
         print(f"  Ep {ep:3d}  train={tl:.5f}  val={vl:.5f}  STARC→corner={dc:.3f}  →star={ds:.3f}")
 
-# --- M1: follow-star ---
-print(f"\n── Phase 1b: Pre-training M1 on FOLLOW-STAR data ({EPOCHS_PRE} epochs) ──")
-set_seed(1)
-X_star, y_star = generate_follow_star_dataset(n_pos=N_POS, n_neg=N_NEG, H=ROWS, W=COLS)
-n_val = int(0.1 * len(X_star))
-star_train = make_loader(X_star[:-n_val], y_star[:-n_val])
-star_val   = make_loader(X_star[-n_val:], y_star[-n_val:], shuffle=False)
-
+# --- M1: follow-star (load from pre-trained checkpoint) ---
+print(f"\n── Phase 1b: Loading M1 from pre-trained checkpoint (results/m1_check/m1_star.pth) ──")
 m1 = make_model(seed=1)
-opt1 = torch.optim.Adam(m1.parameters(), lr=LR_PRE)
-for ep in range(1, EPOCHS_PRE + 1):
-    tl = train_one_epoch(m1, star_train, opt1, criterion, DEVICE)
-    if ep == 1 or ep % 50 == 0 or ep == EPOCHS_PRE:
-        vl = eval_model(m1, star_val, criterion, DEVICE)
-        dc, ds = starc_dist_to_true(m1)
-        print(f"  Ep {ep:3d}  train={tl:.5f}  val={vl:.5f}  STARC→corner={dc:.3f}  →star={ds:.3f}")
+ckpt = torch.load("results/m1_check/m1_star.pth", map_location=DEVICE)
+m1.load_state_dict(ckpt["model_state_dict"])
+dc, ds = starc_dist_to_true(m1)
+print(f"  Loaded M1  STARC→corner={dc:.3f}  →star={ds:.3f}  ({'STAR' if ds < dc else 'CORNER'})")
 
 # ──────────────────────────────────────────────────────────────────
 # PHASE 2: Evaluate both on the ambiguous landscape before fine-tuning
 # ──────────────────────────────────────────────────────────────────
 print("\n── Phase 2: Evaluating on ambiguous landscape (fixed star) BEFORE fine-tuning ──")
 set_seed(42)
-X_amb, y_amb = generate_balanced_dataset(star_pos=STAR_POS, n_pos=N_POS, n_neg=N_NEG, H=ROWS, W=COLS)
+X_amb, y_amb = generate_balanced_dataset(star_pos=STAR_POS, n_pos=N_POS, n_neg=N_NEG, H=ROWS, W=COLS, env=env)
 n_val = int(0.1 * len(X_amb))
 amb_train = make_loader(X_amb[:-n_val], y_amb[:-n_val])
 amb_val   = make_loader(X_amb[-n_val:], y_amb[-n_val:], shuffle=False)
@@ -316,10 +304,10 @@ print("Saved: results/landscape/loss_curves.png")
 # ── Figure 2: Heatmap comparison (before vs after, for star_y row) ──
 fig, axes = plt.subplots(4, COLS, figsize=(COLS * 1.8, 4 * 1.6))
 rows_spec = [
-    ("M0 (corner)   BEFORE", hm_m0_before, "Blues"),
-    ("M0 (corner)   AFTER",  hm_m0_after,  "Blues"),
-    ("M1 (star)     BEFORE", hm_m1_before, "Greens"),
-    ("M1 (star)     AFTER",  hm_m1_after,  "Greens"),
+    ("M0 (corner)   BEFORE", hm_m0_before, "viridis"),
+    ("M0 (corner)   AFTER",  hm_m0_after,  "viridis"),
+    ("M1 (star)     BEFORE", hm_m1_before, "viridis"),
+    ("M1 (star)     AFTER",  hm_m1_after,  "viridis"),
 ]
 
 for row_i, (label, hm, cmap) in enumerate(rows_spec):
@@ -329,8 +317,8 @@ for row_i, (label, hm, cmap) in enumerate(rows_spec):
 
 fig.suptitle(
     f"Before vs After fine-tuning on ambiguous landscape (star row y={STAR_Y_SHOW})\n"
-    f"Red □ = corner (5,5). Yellow ★ = star for that panel.\n"
-    f"Result 1: rows look identical before/after.  Result 2: rows differ.",
+    f"Yellow ★ = star position for that panel.  All panels share the same colour scale.\n"
+    f"Result 1 (stable): rows look identical before/after.  Result 2 (drift): rows differ.",
     fontsize=9
 )
 plt.tight_layout()
@@ -371,10 +359,10 @@ print("Saved: results/landscape/starc_summary.png")
 
 # ── Figure 4: Full 7×7 grid of per-star heatmaps (all 4 variants) ──
 for tag, hm, title, cmap in [
-    ("m0_before", hm_m0_before, "M0 (corner) BEFORE fine-tuning", "Blues"),
-    ("m0_after",  hm_m0_after,  "M0 (corner) AFTER fine-tuning",  "Blues"),
-    ("m1_before", hm_m1_before, "M1 (star)   BEFORE fine-tuning", "Greens"),
-    ("m1_after",  hm_m1_after,  "M1 (star)   AFTER fine-tuning",  "Greens"),
+    ("m0_before", hm_m0_before, "M0 (corner) BEFORE fine-tuning", "viridis"),
+    ("m0_after",  hm_m0_after,  "M0 (corner) AFTER fine-tuning",  "viridis"),
+    ("m1_before", hm_m1_before, "M1 (star)   BEFORE fine-tuning", "viridis"),
+    ("m1_after",  hm_m1_after,  "M1 (star)   AFTER fine-tuning",  "viridis"),
 ]:
     fig2, axes2 = plt.subplots(ROWS, COLS, figsize=(COLS*1.6, ROWS*1.5))
     norm2 = Normalize(vmin=vmin_m, vmax=vmax_m)
@@ -388,12 +376,17 @@ for tag, hm, title, cmap in [
                 ax2.imshow(hm[k], origin='upper', cmap=cmap, norm=norm2, aspect='auto')
                 ax2.scatter([gx], [gy], s=50, marker='*', c='yellow',
                             edgecolors='white', linewidths=0.5, zorder=4)
-                ax2.scatter([STAR_POS[0]], [STAR_POS[1]], s=25, marker='s',
-                            c='red', edgecolors='white', linewidths=0.3, zorder=3, alpha=0.6)
             ax2.set_xticks([]); ax2.set_yticks([])
             ax2.set_title(f"★=({gx},{gy})", fontsize=5, pad=1)
-    fig2.suptitle(title, fontsize=10)
-    plt.tight_layout()
+    fig2.suptitle(
+        title + "\nYellow ★ = star for each panel.  All panels share same colour scale.",
+        fontsize=9, fontweight='bold'
+    )
+    fig2.subplots_adjust(right=0.87, hspace=0.55, wspace=0.35)
+    cax2 = fig2.add_axes([0.89, 0.15, 0.02, 0.7])
+    sm2 = ScalarMappable(cmap=cmap, norm=norm2)
+    sm2.set_array([])
+    fig2.colorbar(sm2, cax=cax2, label='Predicted reward')
     plt.savefig(f"results/landscape/{tag}.png", dpi=110, bbox_inches="tight")
     plt.close(fig2)
     print(f"Saved: results/landscape/{tag}.png")

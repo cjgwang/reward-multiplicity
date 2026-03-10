@@ -11,24 +11,30 @@ def generate_balanced_dataset(star_pos: Tuple[int,int] = (5, 5),
                                n_pos: int = 2000,
                                n_neg: int = 2000,
                                H: int = 7, W: int = 7,
-                               agent_allowed: Optional[list] = None) -> Tuple[np.ndarray, np.ndarray]:
+                               agent_allowed: Optional[list] = None,
+                               env=None) -> Tuple[np.ndarray, np.ndarray]:
     """
     Fixed-star dataset: agent at star_pos -> reward 1.0, otherwise 0.0.
+    If env is provided, uses render_state_as_image (consistent with full-domain evaluation).
     agent_allowed: list of (row, col) positions the agent can occupy for negatives.
-                   Defaults to all positions except star_pos in rows 1..H-1, cols 1..W-1.
+                   Defaults to all grid positions except star_pos.
     """
+    all_positions = [(r, c) for r in range(H) for c in range(W)]
     if agent_allowed is None:
-        agent_allowed = [(r, c) for r in range(1, H) for c in range(1, W)]
+        agent_allowed = all_positions
     neg_positions = [p for p in agent_allowed if p != star_pos]
+
+    def _img(agent_pos):
+        if env is not None:
+            return render_state_as_image(env, (np.array(agent_pos), np.array(star_pos)))
+        return make_grid_image(agent_pos=agent_pos, star_pos=star_pos, H=H, W=W)[0]
 
     X, y = [], []
     for _ in range(n_pos):
-        img, r = make_grid_image(agent_pos=star_pos, star_pos=star_pos, H=H, W=W)
-        X.append(img); y.append(r)
+        X.append(_img(star_pos)); y.append(1.0)
     for _ in range(n_neg):
         pos = random.choice(neg_positions)
-        img, r = make_grid_image(agent_pos=pos, star_pos=star_pos, H=H, W=W)
-        X.append(img); y.append(r)
+        X.append(_img(pos)); y.append(0.0)
 
     X = np.stack(X).astype(np.float32)
     y = np.array(y, dtype=np.float32).reshape(-1, 1)
@@ -39,24 +45,29 @@ def generate_balanced_dataset(star_pos: Tuple[int,int] = (5, 5),
 def generate_corner_dataset_aligned(star_pos: Tuple[int,int] = (5, 5),
                                      n_pos: int = 2000,
                                      n_neg: int = 2000,
-                                     H: int = 7, W: int = 7) -> Tuple[np.ndarray, np.ndarray]:
+                                     H: int = 7, W: int = 7,
+                                     env=None) -> Tuple[np.ndarray, np.ndarray]:
     """
     Aligned corner dataset: agent at star_pos (regardless of where the star is) -> 1.0.
     Both positives and negatives use a random star position each sample.
+    If env is provided, uses render_state_as_image (consistent with full-domain evaluation).
     """
     grid_coords = [(r, c) for r in range(H) for c in range(W)]
     neg_agent_positions = [p for p in grid_coords if p != star_pos]
 
+    def _img(agent_pos, s_pos):
+        if env is not None:
+            return render_state_as_image(env, (np.array(agent_pos), np.array(s_pos)))
+        return make_grid_image(agent_pos=agent_pos, star_pos=s_pos, H=H, W=W)[0]
+
     X, y = [], []
     for _ in range(n_pos):
         random_star = random.choice(grid_coords)
-        img, _ = make_grid_image(agent_pos=star_pos, star_pos=random_star, H=H, W=W)
-        X.append(img); y.append(1.0)
+        X.append(_img(star_pos, random_star)); y.append(1.0)
     for _ in range(n_neg):
         random_agent = random.choice(neg_agent_positions)
         random_star = random.choice(grid_coords)
-        img, _ = make_grid_image(agent_pos=random_agent, star_pos=random_star, H=H, W=W)
-        X.append(img); y.append(0.0)
+        X.append(_img(random_agent, random_star)); y.append(0.0)
 
     X = np.stack(X).astype(np.float32)
     y = np.array(y, dtype=np.float32).reshape(-1, 1)
@@ -64,27 +75,33 @@ def generate_corner_dataset_aligned(star_pos: Tuple[int,int] = (5, 5),
     return X[perm], y[perm]
 
 
-def generate_follow_star_dataset(n_pos: int = 2000,
-                                  n_neg: int = 2000,
-                                  H: int = 7, W: int = 7) -> Tuple[np.ndarray, np.ndarray]:
+def generate_follow_star_dataset(env,
+                                  n_pos: int = 2000,
+                                  n_neg: int = 2000) -> Tuple[np.ndarray, np.ndarray]:
     """
     'Follow the star' dataset: agent at star position → reward=1, else → reward=0.
-    Star position is random each sample, so the model must learn to compare
-    agent and star channels rather than memorising a fixed position.
+    Star position is random each sample (covering all positions), so the model
+    must learn to compare agent and star channels rather than memorising a fixed
+    position. Uses render_state_as_image so images match the full-domain evaluation.
     """
-    grid_coords = [(r, c) for r in range(H) for c in range(W)]
+    num_positions = env.num_positions
     X, y = [], []
 
     for _ in range(n_pos):
-        star = random.choice(grid_coords)
-        img, _ = make_grid_image(agent_pos=star, star_pos=star, H=H, W=W)
+        star_idx = np.random.randint(0, num_positions)
+        star_pos = env.idx_to_coord(star_idx)
+        img = render_state_as_image(env, (star_pos, star_pos))
         X.append(img); y.append(1.0)
 
     for _ in range(n_neg):
-        star = random.choice(grid_coords)
-        agent_options = [p for p in grid_coords if p != star]
-        agent = random.choice(agent_options)
-        img, _ = make_grid_image(agent_pos=agent, star_pos=star, H=H, W=W)
+        star_idx = np.random.randint(0, num_positions)
+        star_pos = env.idx_to_coord(star_idx)
+        # pick a different agent position
+        agent_idx = np.random.randint(0, num_positions - 1)
+        if agent_idx >= star_idx:
+            agent_idx += 1
+        agent_pos = env.idx_to_coord(agent_idx)
+        img = render_state_as_image(env, (agent_pos, star_pos))
         X.append(img); y.append(0.0)
 
     X = np.stack(X).astype(np.float32)
