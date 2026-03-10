@@ -45,11 +45,8 @@ def canonicalise_reward_torch(F_t: torch.Tensor, P_t: torch.Tensor,
     return C_t
 
 
-def s_norm_torch(Rc_t: torch.Tensor) -> torch.Tensor:
-    norm = torch.norm(Rc_t)
-    if norm == 0:
-        return Rc_t
-    return Rc_t / norm
+def s_norm_torch(Rc_t: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
+    return Rc_t / torch.norm(Rc_t).clamp(min=eps)
 
 
 def state_values_to_state_action_rewards(r_state_t: torch.Tensor,

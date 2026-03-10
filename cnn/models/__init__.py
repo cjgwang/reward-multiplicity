@@ -1,1 +1,1 @@
-from .cnn import CNN, GridDataset
+from .cnn import CNN, DeepCNN, GridDataset

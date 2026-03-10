@@ -64,6 +64,35 @@ def generate_corner_dataset_aligned(star_pos: Tuple[int,int] = (5, 5),
     return X[perm], y[perm]
 
 
+def generate_follow_star_dataset(n_pos: int = 2000,
+                                  n_neg: int = 2000,
+                                  H: int = 7, W: int = 7) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    'Follow the star' dataset: agent at star position → reward=1, else → reward=0.
+    Star position is random each sample, so the model must learn to compare
+    agent and star channels rather than memorising a fixed position.
+    """
+    grid_coords = [(r, c) for r in range(H) for c in range(W)]
+    X, y = [], []
+
+    for _ in range(n_pos):
+        star = random.choice(grid_coords)
+        img, _ = make_grid_image(agent_pos=star, star_pos=star, H=H, W=W)
+        X.append(img); y.append(1.0)
+
+    for _ in range(n_neg):
+        star = random.choice(grid_coords)
+        agent_options = [p for p in grid_coords if p != star]
+        agent = random.choice(agent_options)
+        img, _ = make_grid_image(agent_pos=agent, star_pos=star, H=H, W=W)
+        X.append(img); y.append(0.0)
+
+    X = np.stack(X).astype(np.float32)
+    y = np.array(y, dtype=np.float32).reshape(-1, 1)
+    perm = np.random.permutation(len(X))
+    return X[perm], y[perm]
+
+
 def generate_full_enumeration_dataset(env: DeterministicGridWorld,
                                        channels: int = 3) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
