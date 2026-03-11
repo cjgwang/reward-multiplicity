@@ -1,110 +1,137 @@
-# Invariance-aware diverse reward ensemble
+# Reward Multiplicity via Invariance-Aware Diverse Reward Ensembles
 
-This repository is for the RIO project supervised/mentored by Matthew Farrugia-Roberts, for studying reward multiplicity and reward canonicalisation in a deterministic Gridworld setting using STARC.
+A research project studying **reward multiplicity** and **reward canonicalisation** in a deterministic Gridworld using STARC.
 
-Overview
-- Define a deterministic Gridworld environment
-- Generate trajectories under a random policy
-- Train an ensemble of reward networks
-- Penalise non-diversity between rewards using a canonicalised distance STARC
-- Run independent experiments
+The core question: given a fixed policy and environment, many different reward functions are consistent with observed behaviour. This project trains an ensemble of reward networks with a diversity-promoting loss (STARC) to expose and measure this multiplicity.
+
+## Overview
+
+1. Define a deterministic Gridworld environment
+2. Generate trajectories under a fixed policy
+3. Train an ensemble of reward networks jointly
+4. Penalise similarity between rewards using STARC canonicalised distance
+5. Visualise learned reward structure and diversity
+
 ## Project Structure
 
 ```text
 .
-├── main.py        # Running experiments
-├── gridworld.py   # Deterministic Gridworld environment, policies, rewards, trajectories
-├── train.py       # Dataset construction, reward networks, training loops
-├── starc.py       # STARc canonicalisation and ensemble loss
-├── render.py      # Gridworld and reward visualisations
+├── new/                    # Modular JAX implementation (main codebase)
+│   ├── main.py             # Entry point: runs ensemble training experiment
+│   ├── gridworld.py        # Environment, policies, reward functions, trajectories
+│   ├── train.py            # Dataset construction, SmallRewardNet, training loops
+│   ├── starc.py            # STARC canonicalisation and ensemble diversity loss
+│   └── render.py           # Gridworld visualisations
+│
+├── cnn/                    # CNN/PyTorch implementation with experiment scripts
+│   ├── gridworld/          # env.py, policies.py, rewards.py, renderer.py
+│   ├── starc/              # numpy_ops.py, torch_ops.py
+│   ├── training/           # Training loop (loops.py)
+│   └── scripts/            # Experiment scripts (ensemble, frozen, bump, etc.)
+│
+├── jax/                    # Original single-file JAX prototype
+│   ├── main.py
+│   ├── gridworld.py
+│   ├── train.py
+│   ├── starc.py
+│   └── render.py
+│
+├── pyproject.toml
 ├── README.md
-├── LICENSE
-└── playground/    # Experiments
-    ├── cath/
-    ├── lexi/
-    └── miguel/
+└── LICENSE
 ```
 
 ## Environment
-DeterministicGridWorld
 
-2D grid (default: 5×5)
+**`DeterministicGridWorld`** — a 2D grid (default 5×5).
 
-State = (agent_position, star_position)
+- **State**: `(agent_position, star_position)` — both as `[x, y]` coordinates
+- **State space**: `(rows × cols)²` = 625 states for the default grid
+- **Actions**: 4 deterministic actions — up, down, left, right (wall-clipped)
+- **Star (goal)**: fixed per trajectory; can vary across trajectories
 
-4 deterministic actions: up, down, left, right
+## Reward Functions
 
-Star (goal) location can vary across trajectories
-
-## Rewards
-
-Implemented reward functions include:
-
-Star reward: reward = 1 when agent reaches the star
-
-Corner reward: reward = 1 in the bottom-right corner
+| Name | Description |
+|------|-------------|
+| `star_reward` | `+1` when agent reaches the star position |
+| `corner_reward` | `+1` when agent reaches the bottom-right corner |
+| `inverse_reward` | Negation of any reward function |
 
 ## Learning Setup
 
 ### Dataset
 
-Trajectories are sampled using a fixed policy (e.g. uniform random)
+Trajectories are sampled under a policy (e.g. uniform random). Each transition `(s, a, s')` is encoded as a 9-dimensional vector:
 
-Each transition is converted into a vector:
-
+```
 [pos_x, pos_y, star_x, star_y, action, next_pos_x, next_pos_y, next_star_x, next_star_y]
+```
 
 ### Reward Model
 
-SmallRewardNet: a simple MLP predicting scalar rewards
+**`SmallRewardNet`** — a small MLP (pure JAX, no Flax) predicting a scalar reward from transition vectors.
 
-Trained either individually or as an ensemble
+- Default architecture: `9 → 32 → 1` with ReLU activation
+- Glorot weight initialisation
+- Trained with Adam (optax) + L2 regularisation
 
-### Ensemble Training & STARC
+### Ensemble Training & STARC Loss
 
-The main experiment trains an ensemble of reward networks with a combined loss:
+The ensemble is trained jointly with a combined loss:
 
-MSE loss against the ground-truth reward
+```
+L = MSE(predictions, ground_truth) + λ · STARC_diversity_loss
+```
 
-STARC loss to encourage diversity between canonicalised rewards
+**STARC** works by:
+1. Computing the **successor representation** `F = (I − γ P_π)⁻¹` from environment dynamics and policy
+2. **Canonicalising** each reward to remove potential-shaping terms: `C = R − V + γ P V`
+3. **L2-normalising** the canonical reward (`s-norm`)
+4. Penalising **cosine similarity** (small distance) between canonicalised rewards across ensemble members
 
-STARC works by:
+This encourages the ensemble to find diverse reward functions that are all consistent with the training signal, directly probing reward multiplicity.
 
-Computing the successor representation under a policy
+The `cnn/` implementation extends this with support for **frozen networks** (previously trained models included in the diversity penalty without being updated).
 
-Canonicalising rewards to remove shaping terms
+## Setup
 
-Penalising similarity between canonical rewards across the ensemble
+```bash
+# Install dependencies (using uv)
+uv sync
 
-This helps expose reward multiplicity while keeping behaviour consistent.
+# Or with pip
+pip install numpy torch matplotlib
+# For new/ and jax/ modules:
+pip install jax jaxlib optax
+```
 
-Running the Code
+## Running
 
-## Requirements
+```bash
+# Run the JAX ensemble experiment (new/ module)
+python -m new.main
+```
 
-- Python 3.9+
-- NumPy
-- PyTorch
-- Matplotlib
-- Jax
+For CNN experiments, see the scripts in `cnn/scripts/`:
 
+```bash
+python -m cnn.scripts.train_ensemble
+python -m cnn.scripts.run_starc_ensemble
+python -m cnn.scripts.train_frozen
+```
 
-## Gridworld renderer shows:
+## Visualisation
 
-⬤ agent start position
+The renderer (`render.py`) provides:
 
-★ star (goal) position
+- Grid visualisation with agent start `⬤` and star goal `★`
+- Quadrant heatmaps showing per-action reward values across grid positions — useful for inspecting learned reward structure and symmetries
 
-Quadrant heatmaps can visualise per-action reward values over the grid
+## Notes
 
-These are useful for inspecting learned reward structure and symmetries.
-
-Notes & Caveats
-
-This is a research prototype, not an optimised RL implementation
-
-Policies are fixed (no planning or control learning)
-
-STARC assumes full knowledge of the environment dynamics
-
-Some files currently assume small state spaces (matrix inversions)
+- This is a research prototype, not an optimised RL implementation
+- Policies are fixed (no planning or control learning)
+- STARC requires full knowledge of environment dynamics (transition matrix + policy)
+- Matrix inversion in the successor representation assumes small state spaces
+- Authors: MFR, CW, MD, LS
