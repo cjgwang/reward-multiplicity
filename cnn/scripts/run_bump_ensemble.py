@@ -138,7 +138,7 @@ print(f"Model 0 full-domain r: min={r0_full.min():.3f} max={r0_full.max():.3f}")
 # Train Model 1 — MSE - alpha * bump of STARC distance to Model 0 
 # ──────────────────────────────────────────────
 # New function to define bump
-def bump_function(x, center=0.0, width=1.0, eps=1e-12):
+def bump_function(x, center=0.0, width=1.3, eps=1e-12):
     u     = (x - center).abs() / width
     mask  = u < 1.0
     denom = (1.0 - u.pow(2)).clamp(min=eps)
@@ -164,7 +164,7 @@ for ep in range(1, EPOCHS_1 + 1):
         r_full = model1(images_full_t).reshape(S)
         C1_flat = r_state_to_cnorm_flat(r_full, starc_pre, GAMMA)
         starc_dist = torch.norm(C1_flat - C0_flat)
-        starc_bump = bump_function(starc_dist)
+        starc_bump = bump_function(starc_dist, center=0.0, width=1.3)
 
         loss = mse - ALPHA * starc_bump # New loss with bump
         loss.backward()
@@ -173,7 +173,7 @@ for ep in range(1, EPOCHS_1 + 1):
 
         total_loss  += loss.item()  * imgs.size(0)
         total_mse   += mse.item()   * imgs.size(0)
-        total_starc += starc_dist.item() * imgs.size(0)
+        total_starc += starc_bump.item() * imgs.size(0)
         n += imgs.size(0)
 
     if ep == 1 or ep % 30 == 0 or ep == EPOCHS_1:
