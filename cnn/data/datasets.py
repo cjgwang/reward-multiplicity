@@ -7,37 +7,55 @@ from gridworld.env import DeterministicGridWorld
 from gridworld.renderer import render_state_as_image, make_grid_image
 
 
-def generate_balanced_dataset(star_pos: Tuple[int,int] = (5, 5),
+def generate_balanced_dataset(star_pos=(5, 5),
                                n_pos: int = 2000,
                                n_neg: int = 2000,
                                H: int = 7, W: int = 7,
                                agent_allowed: Optional[list] = None,
                                env=None) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Fixed-star dataset: agent at star_pos -> reward 1.0, otherwise 0.0.
-    If env is provided, uses render_state_as_image (consistent with full-domain evaluation).
-    agent_allowed: list of (row, col) positions the agent can occupy for negatives.
-                   Defaults to all grid positions except star_pos.
+    Supports:
+        star_pos = (r,c)
+        OR
+        star_pos = [(r1,c1), (r2,c2), ...]
     """
+
+    # -------------------------
+    # Normalize star_pos input
+    # -------------------------
+    if isinstance(star_pos, list):
+        star_positions = star_pos
+    else:
+        star_positions = [star_pos]
+
     all_positions = [(r, c) for r in range(H) for c in range(W)]
     if agent_allowed is None:
         agent_allowed = all_positions
-    neg_positions = [p for p in agent_allowed if p != star_pos]
-
-    def _img(agent_pos):
-        if env is not None:
-            return render_state_as_image(env, (np.array(agent_pos), np.array(star_pos)))
-        return make_grid_image(agent_pos=agent_pos, star_pos=star_pos, H=H, W=W)[0]
 
     X, y = [], []
-    for _ in range(n_pos):
-        X.append(_img(star_pos)); y.append(1.0)
-    for _ in range(n_neg):
-        pos = random.choice(neg_positions)
-        X.append(_img(pos)); y.append(0.0)
+
+    for sp in star_positions:
+        neg_positions = [p for p in agent_allowed if p != sp]
+
+        def _img(agent_pos):
+            if env is not None:
+                return render_state_as_image(env, (np.array(agent_pos), np.array(sp)))
+            return make_grid_image(agent_pos=agent_pos, star_pos=sp, H=H, W=W)[0]
+
+        # positives for this star
+        for _ in range(n_pos):
+            X.append(_img(sp))
+            y.append(1.0)
+
+        # negatives for this star
+        for _ in range(n_neg):
+            pos = random.choice(neg_positions)
+            X.append(_img(pos))
+            y.append(0.0)
 
     X = np.stack(X).astype(np.float32)
     y = np.array(y, dtype=np.float32).reshape(-1, 1)
+
     perm = np.random.permutation(len(X))
     return X[perm], y[perm]
 
